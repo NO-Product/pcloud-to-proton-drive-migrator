@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SELF="$(readlink -f -- "$0" 2>/dev/null || printf '%s' "$0")"
+ROOT="$(CDPATH= cd -- "$(dirname -- "$SELF")/.." && pwd)"
+source "$ROOT/scripts/lib/config.sh"
+source "$ROOT/scripts/lib/checks.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: pcloud-proton-migrate --config PATH <command>
+
+  config validate
+  doctor
+  preflight --offline
+  auth status
+  source account status
+  auth login
+  compatibility probe
+  source inventory start|resume|status
+  source checksums start|resume|status
+  source freeze
+  source freshness start|resume|status
+  download start|resume|status
+  local metadata start|resume|status
+  local reconcile start|resume|status
+  local verify start|resume|status
+  local remediate start|resume|status
+  upload plan|start|resume|status
+  destination verify start|resume|status
+  overall status --json
+  supervise
+  supervisor-run
+  progress-snapshot
+  completion gate
+
+Every command requires --config PATH or MIGRATION_CONFIG. pCloud is immutable:
+the configured source is accepted only by read-only inventory/download/check paths.
+EOF
+}
+
+require_count() {
+  local expected="$1"
+  shift
+  [ "$#" -eq "$expected" ] || { usage >&2; exit 2; }
+}
+
+CONFIG="${MIGRATION_CONFIG:-}"
+if [ "${1:-}" = --config ]; then
+  [ "$#" -ge 2 ] || { usage >&2; exit 2; }
+  CONFIG="$2"
+  shift 2
+fi
+[ -n "$CONFIG" ] || { usage >&2; exit 2; }
+export MIGRATION_CONFIG="$CONFIG"
+pcm_load_config
+
+FULL_SYNC="$ROOT/scripts/migration/full-sync.sh"
+
+run_as_runtime() {
+  if [ "$(id -un)" = "$PCM_RUNTIME_USER" ]; then
+    "$@"
+  elif [ "$(id -u)" -eq 0 ]; then
+    sudo -u "$PCM_RUNTIME_USER" -H "$@"
+  else
+    printf 'auth error: run as %s or root\n' "$PCM_RUNTIME_USER" >&2
+    return 2
+  fi
+}
+
+case "${1:-}" in
+  config)
+    [ "${2:-}" = validate ] && [ "$#" -eq 2 ] || { usage >&2; exit 2; }
+    printf '{"status":"valid","scope":"syntax-and-schema"}\n'
+    ;;
+  doctor)
+    [ "$#" -eq 1 ] || { usage >&2; exit 2; }
+    pcm_doctor
+    ;;
+  preflight)
+    [ "${2:-}" = --offline ] && [ "$#" -eq 2 ] || { usage >&2; exit 2; }
+    exec "$ROOT/scripts/migration/vps-preflight.sh" --offline --config "$PCM_CONFIG_FILE"
+    ;;
+  auth)
+    case "${2:-}" in
+      status) require_count 2 "$@"; exec "$FULL_SYNC" account-status ;;
+      login)
+        require_count 2 "$@"
+        run_as_runtime "$PCM_PROTON_RUNNER" "$PCM_PROTON_BIN" account login
+        ;;
+      *) usage >&2; exit 2 ;;
+    esac
+    ;;
+  compatibility)
+    [ "${2:-}" = probe ] && [ "$#" -eq 2 ] || { usage >&2; exit 2; }
+    exec "$FULL_SYNC" compatibility-status
+    ;;
+  source)
+    case "${2:-}" in
+      account)
+        [ "${3:-}" = status ] && [ "$#" -eq 3 ] || { usage >&2; exit 2; }
+        pcm_check_rclone_source
+        exec "$FULL_SYNC" source-account-status
+        ;;
+      inventory)
+        pcm_check_rclone_source
+        [ "$#" -ne 2 ] || exec "$FULL_SYNC" inventory-start
+        [ "$#" -eq 3 ] || { usage >&2; exit 2; }
+        case "$3" in start|resume) exec "$FULL_SYNC" inventory-start ;; status) exec "$FULL_SYNC" inventory-status ;; *) usage >&2; exit 2 ;; esac
+        ;;
+      inventory-status) [ "$#" -eq 2 ] || { usage >&2; exit 2; }; pcm_check_rclone_source; exec "$FULL_SYNC" inventory-status ;;
+      checksums)
+        pcm_check_rclone_source
+        [ "$#" -ne 2 ] || exec "$FULL_SYNC" checksums-start
+        [ "$#" -eq 3 ] || { usage >&2; exit 2; }
+        case "$3" in start|resume) exec "$FULL_SYNC" checksums-start ;; status) exec "$FULL_SYNC" phase-status checksums ;; *) usage >&2; exit 2 ;; esac
+        ;;
+      freeze) [ "$#" -eq 2 ] || { usage >&2; exit 2; }; pcm_check_rclone_source; exec "$FULL_SYNC" source-freeze ;;
+      freshness)
+        pcm_check_rclone_source
+        [ "$#" -eq 3 ] || { usage >&2; exit 2; }
+        case "$3" in start|resume) exec "$FULL_SYNC" remote-check-start ;; status) exec "$FULL_SYNC" phase-status source-freshness ;; *) usage >&2; exit 2 ;; esac
+        ;;
+      *) usage >&2; exit 2 ;;
+    esac
+    ;;
+  download)
+    pcm_check_rclone_source
+    [ "$#" -eq 2 ] || { usage >&2; exit 2; }
+    case "${2:-}" in
+      start|resume) exec "$FULL_SYNC" download-start ;;
+      status) exec "$FULL_SYNC" phase-status download ;;
+      *) usage >&2; exit 2 ;;
+    esac
+    ;;
+  local)
+    [ "$#" -eq 3 ] || { usage >&2; exit 2; }
+    if [ "${2:-}" = remediate ]; then pcm_check_rclone_source; fi
+    case "${2:-}:${3:-}" in
+      metadata:start|metadata:resume) exec "$FULL_SYNC" metadata-apply-start ;;
+      metadata:status) exec "$FULL_SYNC" phase-status metadata-apply ;;
+      reconcile:start|reconcile:resume) exec "$FULL_SYNC" reconcile-start ;;
+      reconcile:status) exec "$FULL_SYNC" phase-status reconcile ;;
+      verify:start|verify:resume) exec "$FULL_SYNC" verify-local-start sha1 ;;
+      verify:status) exec "$FULL_SYNC" phase-status verify-local ;;
+      remediate:start|remediate:resume) exec "$FULL_SYNC" remediate-start ;;
+      remediate:status) exec "$FULL_SYNC" phase-status remediate ;;
+      *) usage >&2; exit 2 ;;
+    esac
+    ;;
+  upload)
+    [ "$#" -eq 2 ] || { usage >&2; exit 2; }
+    case "${2:-}" in
+      plan) exec "$FULL_SYNC" upload-plan ;;
+      start) exec "$FULL_SYNC" upload-start ;;
+      resume) exec "$FULL_SYNC" upload-recover-start ;;
+      status) exec "$FULL_SYNC" upload-status ;;
+      *) usage >&2; exit 2 ;;
+    esac
+    ;;
+  destination)
+    [ "${2:-}" = verify ] || { usage >&2; exit 2; }
+    [ "$#" -eq 3 ] || { usage >&2; exit 2; }
+    case "${3:-}" in
+      start|resume) exec "$FULL_SYNC" proton-verify-start ;;
+      status) exec "$FULL_SYNC" proton-verify-status ;;
+      *) usage >&2; exit 2 ;;
+    esac
+    ;;
+  overall)
+    [ "$#" -eq 3 ] && [ "${2:-}" = status ] && [ "${3:-}" = --json ] || { usage >&2; exit 2; }
+    exec "$FULL_SYNC" status --json
+    ;;
+  supervise) [ "$#" -eq 1 ] || { usage >&2; exit 2; }; exec "$FULL_SYNC" supervise ;;
+  supervisor-run) [ "$#" -eq 1 ] || { usage >&2; exit 2; }; exec "$FULL_SYNC" supervise ;;
+  progress-snapshot) [ "$#" -eq 1 ] || { usage >&2; exit 2; }; exec "$ROOT/scripts/migration/proton-progress-snapshot.sh" ;;
+  completion)
+    [ "$#" -eq 2 ] && [ "${2:-}" = gate ] || { usage >&2; exit 2; }
+    exec "$FULL_SYNC" completion-gate
+    ;;
+  *) usage >&2; exit 2 ;;
+esac

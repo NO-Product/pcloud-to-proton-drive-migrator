@@ -1,0 +1,12 @@
+[Unit]
+Description=Capture Proton migration progress every twenty minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=20min
+AccuracySec=1min
+Persistent=true
+Unit=proton-progress-monitor.service
+
+[Install]
+WantedBy=timers.target

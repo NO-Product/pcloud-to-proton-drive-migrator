@@ -1,0 +1,26 @@
+name: Bug report
+description: Report a reproducible defect without private migration data
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Never include credentials, provider data, manifests, or unredacted logs.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observed and expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Redacted reproduction steps
+    validations:
+      required: true

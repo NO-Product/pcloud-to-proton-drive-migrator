@@ -1,0 +1,4 @@
+interface:
+  display_name: "pCloud to Proton Migration"
+  short_description: "Safely operate and verify cloud migrations"
+  default_prompt: "Use $migrate-pcloud-to-proton to start or resume a verified pCloud-to-Proton migration."

@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pcloud-proton-migrate"
+version = "0.1.0"
+description = "Resumable, evidence-driven migration from pCloud to Proton Drive"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = { text = "Apache-2.0" }
+authors = [{ name = "pcloud-proton-migrate contributors" }]
+keywords = ["backup", "cloud-migration", "pcloud", "proton-drive", "reconciliation", "resumable"]
+dependencies = []
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: System :: Archiving :: Backup",
+  "Topic :: System :: Systems Administration",
+]
+
+[project.urls]
+Homepage = "https://github.com/NO-Product/pcloud-to-proton-drive-migrator"
+Documentation = "https://github.com/NO-Product/pcloud-to-proton-drive-migrator/tree/main/docs"
+Issues = "https://github.com/NO-Product/pcloud-to-proton-drive-migrator/issues"
+Repository = "https://github.com/NO-Product/pcloud-to-proton-drive-migrator"
+
+[tool.setuptools]
+py-modules = []

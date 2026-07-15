@@ -1,0 +1,30 @@
+[Unit]
+Description=Advance and recover the pCloud to Proton migration
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@PCM_RUNTIME_USER@
+Group=@PCM_RUNTIME_USER@
+Environment=HOME=/var/lib/pcloud-proton-migrate
+Environment=XDG_CONFIG_HOME=/var/lib/pcloud-proton-migrate/config
+Environment=XDG_DATA_HOME=/var/lib/pcloud-proton-migrate/data
+Environment=XDG_CACHE_HOME=/var/cache/pcloud-proton-migrate
+StateDirectory=pcloud-proton-migrate
+StateDirectoryMode=0700
+CacheDirectory=pcloud-proton-migrate
+CacheDirectoryMode=0700
+ExecStart=/usr/local/bin/pcloud-proton-migrate --config @PCM_CONFIG_FILE@ supervisor-run
+TimeoutStartSec=infinity
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictSUIDSGID=true
+UMask=0077
